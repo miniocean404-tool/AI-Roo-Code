@@ -1,41 +1,175 @@
-import { z } from "zod"
-
 /**
- * HistoryItem
+ * @fileoverview 任务历史类型定义
+ *
+ * 这个文件定义了 Roo Code 中任务历史记录相关的类型。
+ * 任务历史用于持久化存储已完成和进行中的任务信息。
+ *
+ * 主要用途：
+ * - 任务恢复：允许用户恢复之前的对话
+ * - 使用统计：记录 token 使用量和成本
+ * - 任务委派追踪：记录父子任务关系
+ *
+ * 存储位置：
+ * - 每个任务的历史记录存储在 globalStorage 中
+ * - 包含任务元数据、消息历史、API 对话历史等
  */
 
+import { z } from "zod"
+
+// ============================================================================
+// HistoryItem - 任务历史项
+// ============================================================================
+
+/**
+ * 任务历史项的 Zod 验证模式
+ *
+ * 记录单个任务的完整历史信息，包括：
+ * - 基本信息（ID、时间戳、任务描述）
+ * - Token 使用统计（输入、输出、缓存）
+ * - 任务委派关系（父任务、子任务）
+ * - 任务状态和完成信息
+ */
 export const historyItemSchema = z.object({
+	// ========================================================================
+	// 基本标识信息
+	// ========================================================================
+
+	/** 任务唯一标识符 */
 	id: z.string(),
-	rootTaskId: z.string().optional(),
-	parentTaskId: z.string().optional(),
-	number: z.number(),
-	ts: z.number(),
-	task: z.string(),
-	tokensIn: z.number(),
-	tokensOut: z.number(),
-	cacheWrites: z.number().optional(),
-	cacheReads: z.number().optional(),
-	totalCost: z.number(),
-	size: z.number().optional(),
-	workspace: z.string().optional(),
-	mode: z.string().optional(),
+
 	/**
-	 * The tool protocol used by this task. Once a task uses tools with a specific
-	 * protocol (XML or Native), it is permanently locked to that protocol.
+	 * 根任务 ID
+	 * 如果此任务是子任务，指向最顶层的根任务
+	 */
+	rootTaskId: z.string().optional(),
+
+	/**
+	 * 父任务 ID
+	 * 如果此任务是通过 new_task 工具创建的子任务，指向创建它的父任务
+	 */
+	parentTaskId: z.string().optional(),
+
+	/** 任务序号（在历史列表中的位置） */
+	number: z.number(),
+
+	/** 任务创建时间戳（Unix 毫秒） */
+	ts: z.number(),
+
+	/** 任务的初始消息/描述 */
+	task: z.string(),
+
+	// ========================================================================
+	// Token 使用统计
+	// ========================================================================
+
+	/** 输入 token 数量（发送给 AI 的） */
+	tokensIn: z.number(),
+
+	/** 输出 token 数量（AI 生成的） */
+	tokensOut: z.number(),
+
+	/**
+	 * 缓存写入 token 数量
+	 * 写入提示词缓存的 token 数
+	 */
+	cacheWrites: z.number().optional(),
+
+	/**
+	 * 缓存读取 token 数量
+	 * 从提示词缓存读取的 token 数（节省的成本）
+	 */
+	cacheReads: z.number().optional(),
+
+	/** 任务总成本（美元） */
+	totalCost: z.number(),
+
+	// ========================================================================
+	// 任务元数据
+	// ========================================================================
+
+	/**
+	 * 任务数据大小（字节）
+	 * 包括消息历史、API 对话历史等
+	 */
+	size: z.number().optional(),
+
+	/** 任务所在的工作区路径 */
+	workspace: z.string().optional(),
+
+	/** 任务使用的工作模式（code, architect, ask 等） */
+	mode: z.string().optional(),
+
+	/**
+	 * 任务使用的工具协议
 	 *
-	 * - "xml": Tool calls are parsed from XML text (no tool IDs)
-	 * - "native": Tool calls come as tool_call chunks with IDs
+	 * 一旦任务使用了特定协议的工具，就会被锁定到该协议。
+	 * 这确保任务恢复时即使 NTC 设置改变也能正确工作。
 	 *
-	 * This ensures task resumption works correctly even when NTC settings change.
+	 * - "xml": 工具调用从 XML 文本解析（无工具 ID）
+	 * - "native": 工具调用作为 tool_call 块传递（带 ID）
 	 */
 	toolProtocol: z.enum(["xml", "native"]).optional(),
-	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
+
+	/**
+	 * API 配置文件名称
+	 * 用于"粘性配置文件"功能，记录任务使用的提供者配置
+	 */
+	apiConfigName: z.string().optional(),
+
+	// ========================================================================
+	// 任务状态
+	// ========================================================================
+
+	/**
+	 * 任务状态
+	 * - "active": 活跃状态，任务正在进行
+	 * - "completed": 已完成状态
+	 * - "delegated": 已委派状态，等待子任务完成
+	 */
 	status: z.enum(["active", "completed", "delegated"]).optional(),
-	delegatedToId: z.string().optional(), // Last child this parent delegated to
-	childIds: z.array(z.string()).optional(), // All children spawned by this task
-	awaitingChildId: z.string().optional(), // Child currently awaited (set when delegated)
-	completedByChildId: z.string().optional(), // Child that completed and resumed this parent
-	completionResultSummary: z.string().optional(), // Summary from completed child
+
+	// ========================================================================
+	// 任务委派关系
+	// ========================================================================
+
+	/**
+	 * 最后委派的子任务 ID
+	 * 记录此父任务最后一次委派给哪个子任务
+	 */
+	delegatedToId: z.string().optional(),
+
+	/**
+	 * 所有子任务 ID 列表
+	 * 记录此任务通过 new_task 工具创建的所有子任务
+	 */
+	childIds: z.array(z.string()).optional(),
+
+	/**
+	 * 当前等待的子任务 ID
+	 * 当任务处于 delegated 状态时，记录正在等待的子任务
+	 */
+	awaitingChildId: z.string().optional(),
+
+	/**
+	 * 完成此任务的子任务 ID
+	 * 记录哪个子任务完成后恢复了此父任务
+	 */
+	completedByChildId: z.string().optional(),
+
+	/**
+	 * 子任务完成结果摘要
+	 * 子任务通过 attempt_completion 工具返回的结果摘要
+	 */
+	completionResultSummary: z.string().optional(),
 })
 
+/**
+ * 任务历史项类型
+ *
+ * 用于：
+ * - 历史列表显示
+ * - 任务恢复
+ * - 使用统计和成本计算
+ * - 任务委派关系追踪
+ */
 export type HistoryItem = z.infer<typeof historyItemSchema>

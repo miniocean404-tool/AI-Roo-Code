@@ -1,3 +1,27 @@
+/**
+ * @fileoverview API 提供者设置类型定义
+ *
+ * 这个文件定义了 Roo Code 中所有 AI 提供者相关的配置类型。
+ * 提供者是连接不同 AI 服务的抽象层，支持 30+ 个不同的 AI 服务。
+ *
+ * 提供者分类：
+ * - DynamicProvider: 动态提供者，需要外部 API 调用获取模型列表
+ *   - OpenRouter, Vercel AI Gateway, HuggingFace, LiteLLM 等
+ * - LocalProvider: 本地提供者，需要本地 API 调用获取模型列表
+ *   - Ollama, LM Studio
+ * - InternalProvider: 内部提供者，使用 VS Code 内部 API
+ *   - VS Code LM API
+ * - CustomProvider: 自定义提供者，完全可配置
+ *   - OpenAI 兼容 API
+ * - FauxProvider: 模拟提供者，不进行实际推理调用
+ *   - Fake AI（用于测试）
+ *
+ * 主要类型：
+ * - ProviderName: 所有提供者名称的联合类型
+ * - ProviderSettings: 提供者配置（API 密钥、模型 ID、基础 URL 等）
+ * - ProviderSettingsEntry: 配置文件条目（用于配置文件管理）
+ */
+
 import { z } from "zod"
 
 import { modelInfoSchema, reasoningEffortSettingSchema, verbosityLevelsSchema, serviceTierSchema } from "./model.js"
@@ -27,18 +51,40 @@ import {
 	minimaxModels,
 } from "./providers/index.js"
 
-/**
- * constants
- */
+// ============================================================================
+// 常量定义
+// ============================================================================
 
+/**
+ * 默认连续错误限制
+ *
+ * 当 AI 连续犯错达到此限制时，会询问用户如何继续。
+ * 这有助于防止 AI 陷入错误循环。
+ */
 export const DEFAULT_CONSECUTIVE_MISTAKE_LIMIT = 3
 
-/**
- * DynamicProvider
- *
- * Dynamic provider requires external API calls in order to get the model list.
- */
+// ============================================================================
+// DynamicProvider - 动态提供者
+// ============================================================================
 
+/**
+ * 动态提供者列表
+ *
+ * 动态提供者需要通过外部 API 调用来获取可用的模型列表。
+ * 这些提供者通常是模型聚合平台或路由服务。
+ *
+ * 包含：
+ * - openrouter: OpenRouter 模型路由平台
+ * - vercel-ai-gateway: Vercel AI Gateway
+ * - huggingface: HuggingFace 推理 API
+ * - litellm: LiteLLM 代理服务
+ * - deepinfra: DeepInfra 推理平台
+ * - io-intelligence: IO Intelligence
+ * - requesty: Requesty 路由服务
+ * - unbound: Unbound AI
+ * - roo: Roo Code 路由服务
+ * - chutes: Chutes AI
+ */
 export const dynamicProviders = [
 	"openrouter",
 	"vercel-ai-gateway",
@@ -52,139 +98,269 @@ export const dynamicProviders = [
 	"chutes",
 ] as const
 
+/**
+ * 动态提供者类型
+ */
 export type DynamicProvider = (typeof dynamicProviders)[number]
 
+/**
+ * 检查是否为动态提供者
+ *
+ * @param key - 要检查的提供者名称
+ * @returns 如果是动态提供者返回 true
+ */
 export const isDynamicProvider = (key: string): key is DynamicProvider =>
 	dynamicProviders.includes(key as DynamicProvider)
 
-/**
- * LocalProvider
- *
- * Local providers require localhost API calls in order to get the model list.
- */
+// ============================================================================
+// LocalProvider - 本地提供者
+// ============================================================================
 
+/**
+ * 本地提供者列表
+ *
+ * 本地提供者需要通过本地 API 调用（localhost）来获取模型列表。
+ * 这些提供者运行在用户的本地机器上。
+ *
+ * 包含：
+ * - ollama: Ollama 本地模型运行时
+ * - lmstudio: LM Studio 本地模型管理器
+ */
 export const localProviders = ["ollama", "lmstudio"] as const
 
+/**
+ * 本地提供者类型
+ */
 export type LocalProvider = (typeof localProviders)[number]
 
+/**
+ * 检查是否为本地提供者
+ *
+ * @param key - 要检查的提供者名称
+ * @returns 如果是本地提供者返回 true
+ */
 export const isLocalProvider = (key: string): key is LocalProvider => localProviders.includes(key as LocalProvider)
 
-/**
- * InternalProvider
- *
- * Internal providers require internal VSCode API calls in order to get the
- * model list.
- */
+// ============================================================================
+// InternalProvider - 内部提供者
+// ============================================================================
 
+/**
+ * 内部提供者列表
+ *
+ * 内部提供者使用 VS Code 内部 API 来获取模型列表。
+ * 这些提供者依赖于 VS Code 的语言模型 API。
+ *
+ * 包含：
+ * - vscode-lm: VS Code 语言模型 API
+ */
 export const internalProviders = ["vscode-lm"] as const
 
+/**
+ * 内部提供者类型
+ */
 export type InternalProvider = (typeof internalProviders)[number]
 
+/**
+ * 检查是否为内部提供者
+ *
+ * @param key - 要检查的提供者名称
+ * @returns 如果是内部提供者返回 true
+ */
 export const isInternalProvider = (key: string): key is InternalProvider =>
 	internalProviders.includes(key as InternalProvider)
 
-/**
- * CustomProvider
- *
- * Custom providers are completely configurable within Roo Code settings.
- */
+// ============================================================================
+// CustomProvider - 自定义提供者
+// ============================================================================
 
+/**
+ * 自定义提供者列表
+ *
+ * 自定义提供者完全可在 Roo Code 设置中配置。
+ * 用户可以指定自定义的 API 端点和模型信息。
+ *
+ * 包含：
+ * - openai: OpenAI 兼容 API（可配置自定义端点）
+ */
 export const customProviders = ["openai"] as const
 
+/**
+ * 自定义提供者类型
+ */
 export type CustomProvider = (typeof customProviders)[number]
 
+/**
+ * 检查是否为自定义提供者
+ *
+ * @param key - 要检查的提供者名称
+ * @returns 如果是自定义提供者返回 true
+ */
 export const isCustomProvider = (key: string): key is CustomProvider => customProviders.includes(key as CustomProvider)
 
-/**
- * FauxProvider
- *
- * Faux providers do not make external inference calls and therefore do not have
- * model lists.
- */
+// ============================================================================
+// FauxProvider - 模拟提供者
+// ============================================================================
 
+/**
+ * 模拟提供者列表
+ *
+ * 模拟提供者不进行实际的推理调用，因此没有模型列表。
+ * 主要用于测试和开发目的。
+ *
+ * 包含：
+ * - fake-ai: 模拟 AI（用于测试）
+ */
 export const fauxProviders = ["fake-ai"] as const
 
+/**
+ * 模拟提供者类型
+ */
 export type FauxProvider = (typeof fauxProviders)[number]
 
+/**
+ * 检查是否为模拟提供者
+ *
+ * @param key - 要检查的提供者名称
+ * @returns 如果是模拟提供者返回 true
+ */
 export const isFauxProvider = (key: string): key is FauxProvider => fauxProviders.includes(key as FauxProvider)
 
-/**
- * ProviderName
- */
+// ============================================================================
+// ProviderName - 提供者名称
+// ============================================================================
 
+/**
+ * 所有提供者名称列表
+ *
+ * 包含所有支持的 AI 提供者，分为以下几类：
+ * - 动态提供者（模型聚合平台）
+ * - 本地提供者（本地运行的模型）
+ * - 内部提供者（VS Code API）
+ * - 自定义提供者（可配置端点）
+ * - 模拟提供者（测试用）
+ * - 直接 API 提供者（Anthropic, OpenAI, Gemini 等）
+ */
 export const providerNames = [
 	...dynamicProviders,
 	...localProviders,
 	...internalProviders,
 	...customProviders,
 	...fauxProviders,
-	"anthropic",
-	"bedrock",
-	"baseten",
-	"cerebras",
-	"claude-code",
-	"doubao",
-	"deepseek",
-	"featherless",
-	"fireworks",
-	"gemini",
-	"gemini-cli",
-	"groq",
-	"mistral",
-	"moonshot",
-	"minimax",
-	"openai-native",
-	"qwen-code",
-	"roo",
-	"sambanova",
-	"vertex",
-	"xai",
-	"zai",
+	"anthropic",      // Anthropic Claude API
+	"bedrock",        // AWS Bedrock
+	"baseten",        // Baseten
+	"cerebras",       // Cerebras
+	"claude-code",    // Claude Code（Anthropic 官方 CLI）
+	"doubao",         // 字节跳动豆包
+	"deepseek",       // DeepSeek
+	"featherless",    // Featherless
+	"fireworks",      // Fireworks AI
+	"gemini",         // Google Gemini
+	"gemini-cli",     // Gemini CLI
+	"groq",           // Groq
+	"mistral",        // Mistral AI
+	"moonshot",       // Moonshot AI（月之暗面）
+	"minimax",        // MiniMax
+	"openai-native",  // OpenAI 原生 API
+	"qwen-code",      // 通义千问代码
+	"roo",            // Roo Code 路由
+	"sambanova",      // SambaNova
+	"vertex",         // Google Vertex AI
+	"xai",            // xAI (Grok)
+	"zai",            // Z.ai
 ] as const
 
+/**
+ * 提供者名称的 Zod 验证模式
+ */
 export const providerNamesSchema = z.enum(providerNames)
 
+/**
+ * 提供者名称类型
+ */
 export type ProviderName = z.infer<typeof providerNamesSchema>
 
+/**
+ * 检查是否为有效的提供者名称
+ *
+ * @param key - 要检查的值
+ * @returns 如果是有效的提供者名称返回 true
+ */
 export const isProviderName = (key: unknown): key is ProviderName =>
 	typeof key === "string" && providerNames.includes(key as ProviderName)
 
-/**
- * ProviderSettingsEntry
- */
+// ============================================================================
+// ProviderSettingsEntry - 配置文件条目
+// ============================================================================
 
+/**
+ * 配置文件条目的 Zod 验证模式
+ *
+ * 用于存储配置文件的元数据，在配置文件列表中显示。
+ *
+ * @property id - 配置文件唯一标识符
+ * @property name - 配置文件显示名称
+ * @property apiProvider - 可选的 API 提供者类型
+ * @property modelId - 可选的模型 ID
+ */
 export const providerSettingsEntrySchema = z.object({
+	/** 配置文件唯一标识符 */
 	id: z.string(),
+	/** 配置文件显示名称 */
 	name: z.string(),
+	/** API 提供者类型 */
 	apiProvider: providerNamesSchema.optional(),
+	/** 模型 ID */
 	modelId: z.string().optional(),
 })
 
+/**
+ * 配置文件条目类型
+ */
 export type ProviderSettingsEntry = z.infer<typeof providerSettingsEntrySchema>
 
-/**
- * ProviderSettings
- */
+// ============================================================================
+// ProviderSettings - 提供者设置
+// ============================================================================
 
+/**
+ * 基础提供者设置的 Zod 验证模式
+ *
+ * 所有提供者共享的通用配置选项。
+ */
 const baseProviderSettingsSchema = z.object({
+	/** 是否在请求中包含 max_tokens 参数 */
 	includeMaxTokens: z.boolean().optional(),
+	/** 是否启用 diff 功能 */
 	diffEnabled: z.boolean().optional(),
+	/** 是否启用待办事项列表 */
 	todoListEnabled: z.boolean().optional(),
+	/** 模糊匹配阈值（0-1，1 表示精确匹配） */
 	fuzzyMatchThreshold: z.number().optional(),
+	/** 模型温度参数（控制输出随机性） */
 	modelTemperature: z.number().nullish(),
+	/** 请求速率限制（秒） */
 	rateLimitSeconds: z.number().optional(),
+	/** 连续错误限制 */
 	consecutiveMistakeLimit: z.number().min(0).optional(),
 
-	// Model reasoning.
+	// 模型推理配置
+	/** 是否启用推理努力程度 */
 	enableReasoningEffort: z.boolean().optional(),
+	/** 推理努力程度 */
 	reasoningEffort: reasoningEffortSettingSchema.optional(),
+	/** 模型最大输出 token 数 */
 	modelMaxTokens: z.number().optional(),
+	/** 模型最大思考 token 数 */
 	modelMaxThinkingTokens: z.number().optional(),
 
-	// Model verbosity.
+	// 模型详细程度
+	/** 输出详细程度 */
 	verbosity: verbosityLevelsSchema.optional(),
 
-	// Tool protocol override for this profile.
+	// 工具协议覆盖
+	/** 此配置文件使用的工具协议 */
 	toolProtocol: z.enum(["xml", "native"]).optional(),
 })
 

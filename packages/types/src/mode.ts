@@ -1,12 +1,45 @@
+/**
+ * @fileoverview 工作模式类型定义
+ *
+ * 这个文件定义了 Roo Code 中工作模式相关的所有类型。
+ * 模式是 AI 助手的"人格"配置，决定了 AI 的行为方式和可用工具。
+ *
+ * 主要类型：
+ * - ModeConfig: 模式配置，包含名称、角色定义、可用工具组等
+ * - GroupEntry: 工具组条目，可以是简单的组名或带选项的元组
+ * - GroupOptions: 工具组选项，如文件正则过滤
+ * - PromptComponent: 提示词组件，用于自定义模式提示词
+ * - CustomModesSettings: 自定义模式设置
+ *
+ * 内置模式：
+ * - architect: 架构师模式，专注于规划和设计
+ * - code: 代码模式，专注于编写和修改代码
+ * - ask: 询问模式，专注于回答问题和解释
+ * - debug: 调试模式，专注于问题诊断和修复
+ * - orchestrator: 编排模式，专注于任务委派和协调
+ */
+
 import { z } from "zod"
 
 import { toolGroupsSchema } from "./tool.js"
 
-/**
- * GroupOptions
- */
+// ============================================================================
+// GroupOptions - 工具组选项
+// ============================================================================
 
+/**
+ * 工具组选项的 Zod 验证模式
+ *
+ * 用于为工具组添加额外的配置选项，如文件过滤。
+ * 例如，architect 模式只允许编辑 Markdown 文件。
+ */
 export const groupOptionsSchema = z.object({
+	/**
+	 * 文件正则表达式过滤器
+	 *
+	 * 限制该工具组只能操作匹配此正则的文件。
+	 * 例如："\\.md$" 只允许操作 Markdown 文件
+	 */
 	fileRegex: z
 		.string()
 		.optional()
@@ -25,23 +58,42 @@ export const groupOptionsSchema = z.object({
 			},
 			{ message: "Invalid regular expression pattern" },
 		),
+	/** 工具组的描述说明 */
 	description: z.string().optional(),
 })
 
+/**
+ * 工具组选项类型
+ */
 export type GroupOptions = z.infer<typeof groupOptionsSchema>
 
-/**
- * GroupEntry
- */
+// ============================================================================
+// GroupEntry - 工具组条目
+// ============================================================================
 
+/**
+ * 工具组条目的 Zod 验证模式
+ *
+ * 工具组条目可以是：
+ * 1. 简单的工具组名称（如 "read", "edit"）
+ * 2. 带选项的元组（如 ["edit", { fileRegex: "\\.md$" }]）
+ */
 export const groupEntrySchema = z.union([toolGroupsSchema, z.tuple([toolGroupsSchema, groupOptionsSchema])])
 
+/**
+ * 工具组条目类型
+ */
 export type GroupEntry = z.infer<typeof groupEntrySchema>
 
-/**
- * ModeConfig
- */
+// ============================================================================
+// ModeConfig - 模式配置
+// ============================================================================
 
+/**
+ * 工具组条目数组的 Zod 验证模式
+ *
+ * 验证规则：不允许重复的工具组
+ */
 const groupEntryArraySchema = z.array(groupEntrySchema).refine(
 	(groups) => {
 		const seen = new Set()
@@ -61,24 +113,94 @@ const groupEntryArraySchema = z.array(groupEntrySchema).refine(
 	{ message: "Duplicate groups are not allowed" },
 )
 
+/**
+ * 模式配置的 Zod 验证模式
+ *
+ * 定义了一个工作模式的完整配置。
+ */
 export const modeConfigSchema = z.object({
+	/**
+	 * 模式标识符（slug）
+	 *
+	 * 用于在代码和配置中引用模式。
+	 * 只能包含字母、数字和连字符。
+	 * 例如："code", "architect", "my-custom-mode"
+	 */
 	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
+
+	/**
+	 * 模式显示名称
+	 *
+	 * 在 UI 中显示的名称，可以包含 emoji。
+	 * 例如："💻 Code", "🏗️ Architect"
+	 */
 	name: z.string().min(1, "Name is required"),
+
+	/**
+	 * 角色定义
+	 *
+	 * 定义 AI 在此模式下的角色和行为。
+	 * 这是系统提示词的核心部分。
+	 */
 	roleDefinition: z.string().min(1, "Role definition is required"),
+
+	/**
+	 * 使用场景说明
+	 *
+	 * 描述何时应该使用此模式。
+	 * 用于帮助用户和 AI 选择合适的模式。
+	 */
 	whenToUse: z.string().optional(),
+
+	/**
+	 * 模式描述
+	 *
+	 * 简短的模式描述，用于 UI 显示。
+	 */
 	description: z.string().optional(),
+
+	/**
+	 * 自定义指令
+	 *
+	 * 额外的指令，会添加到系统提示词中。
+	 * 用于定制模式的具体行为。
+	 */
 	customInstructions: z.string().optional(),
+
+	/**
+	 * 可用工具组
+	 *
+	 * 定义此模式可以使用的工具组。
+	 * 可以是简单的组名或带选项的元组。
+	 */
 	groups: groupEntryArraySchema,
+
+	/**
+	 * 模式来源
+	 *
+	 * - "global": 全局模式（用户级别）
+	 * - "project": 项目模式（项目级别）
+	 */
 	source: z.enum(["global", "project"]).optional(),
 })
 
+/**
+ * 模式配置类型
+ */
 export type ModeConfig = z.infer<typeof modeConfigSchema>
 
-/**
- * CustomModesSettings
- */
+// ============================================================================
+// CustomModesSettings - 自定义模式设置
+// ============================================================================
 
+/**
+ * 自定义模式设置的 Zod 验证模式
+ *
+ * 用于存储用户定义的自定义模式列表。
+ * 验证规则：不允许重复的模式 slug。
+ */
 export const customModesSettingsSchema = z.object({
+	/** 自定义模式列表 */
 	customModes: z.array(modeConfigSchema).refine(
 		(modes) => {
 			const slugs = new Set()
@@ -98,41 +220,105 @@ export const customModesSettingsSchema = z.object({
 	),
 })
 
+/**
+ * 自定义模式设置类型
+ */
 export type CustomModesSettings = z.infer<typeof customModesSettingsSchema>
 
-/**
- * PromptComponent
- */
+// ============================================================================
+// PromptComponent - 提示词组件
+// ============================================================================
 
+/**
+ * 提示词组件的 Zod 验证模式
+ *
+ * 用于自定义模式的提示词部分。
+ * 可以覆盖或扩展默认的提示词内容。
+ */
 export const promptComponentSchema = z.object({
+	/** 角色定义覆盖 */
 	roleDefinition: z.string().optional(),
+	/** 使用场景覆盖 */
 	whenToUse: z.string().optional(),
+	/** 描述覆盖 */
 	description: z.string().optional(),
+	/** 自定义指令覆盖 */
 	customInstructions: z.string().optional(),
 })
 
+/**
+ * 提示词组件类型
+ */
 export type PromptComponent = z.infer<typeof promptComponentSchema>
 
-/**
- * CustomModePrompts
- */
+// ============================================================================
+// CustomModePrompts - 自定义模式提示词
+// ============================================================================
 
+/**
+ * 自定义模式提示词的 Zod 验证模式
+ *
+ * 键为模式 slug，值为该模式的提示词组件。
+ * 用于为不同模式定制提示词内容。
+ */
 export const customModePromptsSchema = z.record(z.string(), promptComponentSchema.optional())
 
+/**
+ * 自定义模式提示词类型
+ */
 export type CustomModePrompts = z.infer<typeof customModePromptsSchema>
 
-/**
- * CustomSupportPrompts
- */
+// ============================================================================
+// CustomSupportPrompts - 自定义支持提示词
+// ============================================================================
 
+/**
+ * 自定义支持提示词的 Zod 验证模式
+ *
+ * 键为提示词标识符，值为提示词内容。
+ * 用于自定义系统级别的支持提示词。
+ */
 export const customSupportPromptsSchema = z.record(z.string(), z.string().optional())
 
+/**
+ * 自定义支持提示词类型
+ */
 export type CustomSupportPrompts = z.infer<typeof customSupportPromptsSchema>
 
-/**
- * DEFAULT_MODES
- */
+// ============================================================================
+// DEFAULT_MODES - 默认模式配置
+// ============================================================================
 
+/**
+ * 默认模式配置
+ *
+ * 定义了 Roo Code 内置的 5 种工作模式：
+ *
+ * 1. **Architect（架构师）**
+ *    - 专注于规划和设计
+ *    - 只能编辑 Markdown 文件
+ *    - 适合在实现前进行设计讨论
+ *
+ * 2. **Code（代码）**
+ *    - 专注于编写和修改代码
+ *    - 拥有完整的文件编辑和命令执行权限
+ *    - 是最常用的模式
+ *
+ * 3. **Ask（询问）**
+ *    - 专注于回答问题和解释
+ *    - 只有读取权限，不能修改文件
+ *    - 适合学习和理解代码
+ *
+ * 4. **Debug（调试）**
+ *    - 专注于问题诊断和修复
+ *    - 强调系统性的调试方法
+ *    - 会先诊断再修复
+ *
+ * 5. **Orchestrator（编排）**
+ *    - 专注于任务委派和协调
+ *    - 没有直接的工具权限
+ *    - 通过创建子任务来完成复杂工作
+ */
 export const DEFAULT_MODES: readonly ModeConfig[] = [
 	{
 		slug: "architect",
